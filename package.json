@@ -21,13 +21,23 @@
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc -p tsconfig.build.json && tsc-alias"
   },
   "dependencies": {
+    "@aws-sdk/client-kms": "^3.946.0",
+    "@noble/secp256k1": "^3.0.0",
     "@scure/bip32": "^2.0.1",
+    "bip32": "^4.0.0",
     "bip39": "^3.1.0",
     "bitcoinjs-lib": "^6.1.7",
     "ethers": "^6.16.0",
+    "tiny-secp256k1": "^2.2.4",
     "tronweb": "^6.0.2"
+  },
+  "devDependencies": {
+    "@types/bip39": "^2.4.2",
+    "prettier": "^3.7.4",
+    "tsc-alias": "^1.8.16",
+    "typescript": "^5.9.3"
   }
 }
