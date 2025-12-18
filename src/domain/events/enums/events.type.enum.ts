@@ -1,0 +1,5 @@
+export enum EventsType {
+  WITHDRAWAL = "WITHDRAWAL",
+  CREATE_WALLET = "CREATE_WALLET",
+  DEPOSIT = "DEPOSIT",
+}

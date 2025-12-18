@@ -32,7 +32,7 @@
     "bitcoinjs-lib": "^6.1.7",
     "ethers": "^6.16.0",
     "tiny-secp256k1": "^2.2.4",
-    "tronweb": "^6.0.2"
+    "tronweb": "^6.1.1"
   },
   "devDependencies": {
     "@types/bip39": "^2.4.2",
