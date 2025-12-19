@@ -5,41 +5,18 @@ import {
   WithdrawalContext,
 } from "@/domain/withdrawal/interfaces"
 import { HdWalletKeyService } from "@/infrastructure/withdrawals/keys/HdWalletKeyService"
-
-interface TronTokenConfig {
-  address: string
-  feeLimitSun: number
-}
-
-interface TronWebClient {
-  address: {
-    toHex(address: string): string
-  }
-  transactionBuilder: {
-    sendTrx(to: string, amount: number, from: string): Promise<any>
-    triggerSmartContract(
-      contractAddress: string,
-      functionSelector: string,
-      options: { feeLimit: number },
-      params: Array<{ type: string; value: string }>,
-      ownerAddress: string
-    ): Promise<{ transaction?: any }>
-  }
-  trx: {
-    sign(transaction: any, privateKey: string): Promise<any>
-    sendRawTransaction(
-      signedTransaction: any
-    ): Promise<{ result?: boolean; txid?: string }>
-  }
-}
+import {
+  ITronTokenConfig,
+  ITronWebClient,
+} from "@/infrastructure/withdrawals/interface"
 
 export class TronWithdrawalAdapter implements IChainWithdrawalAdapter {
   private readonly supportedAssets: WithdrawalAsset[] = ["TRX", "USDT-TRC20"]
 
   constructor(
-    private readonly tronWeb: TronWebClient,
+    private readonly tronWeb: ITronWebClient,
     private readonly keyService: HdWalletKeyService,
-    private readonly tokenConfig: Record<string, TronTokenConfig> = {}
+    private readonly tokenConfig: Record<string, ITronTokenConfig> = {}
   ) {}
 
   supports(asset: WithdrawalAsset): boolean {

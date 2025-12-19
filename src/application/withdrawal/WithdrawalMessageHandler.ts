@@ -1,4 +1,4 @@
-import { IWalletRepository } from "@/domain/wallet/KeyManager"
+import { IWalletRepository } from "@/domain/wallet/interface"
 import { WithdrawalService } from "@/application/withdrawal/WithdrawalService"
 import {
   IWithdrawalMessage,
@@ -13,7 +13,7 @@ export interface BrokerWithdrawalPayload {
   toAddress: string
 }
 
-export class WithdrawalCommand {
+export class WithdrawalMessageHandler {
   constructor(
     private readonly walletRepo: IWalletRepository,
     private readonly withdrawalService: WithdrawalService

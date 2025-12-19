@@ -7,20 +7,13 @@ import * as secp from "@noble/secp256k1"
 import {
   ISealedSecret,
   ISealedSecretRepository,
-} from "@/domain/wallet/SealedSecretRepository"
-import { IWalletRecord } from "@/domain/wallet/KeyManager"
-import { kmsClient } from "@/infrastructure/crypto/kms/kmsClient"
+  IWalletRecord,
+} from "@/domain/wallet/interface"
+import { IDerivedWalletKey } from "@/infrastructure/withdrawals/interface"
+import { awsKmsClient } from "@/infrastructure/key-managers/aws/AwsKmsClient"
 import { aesGcmDecrypt } from "@/infrastructure/crypto/encryption/aes"
 
 const bip32 = BIP32Factory(ecc as any)
-
-export interface IDerivedWalletKey {
-  wallet: IWalletRecord
-  privateKey: Buffer
-  publicKey: Buffer
-  compressedPublicKey: Buffer
-  derivationPath: string
-}
 
 export class HdWalletKeyService {
   constructor(private readonly sealedRepo: ISealedSecretRepository) {}
@@ -66,7 +59,7 @@ export class HdWalletKeyService {
   }
 
   private async unsealMnemonic(sealed: ISealedSecret): Promise<string> {
-    const decryptResp = await kmsClient.send(
+    const decryptResp = await awsKmsClient.send(
       new DecryptCommand({
         CiphertextBlob: Buffer.from(sealed.dataKeyCipherB64, "base64"),
         EncryptionContext: sealed.encContext,

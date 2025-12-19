@@ -7,13 +7,9 @@ import {
   WithdrawalContext,
 } from "@/domain/withdrawal/interfaces"
 import { HdWalletKeyService } from "@/infrastructure/withdrawals/keys/HdWalletKeyService"
+import { IEthereumTokenConfig } from "@/infrastructure/withdrawals/interface"
 
 const ERC20_ABI = ["function transfer(address to, uint256 value) returns (bool)"]
-
-export interface EthereumTokenConfig {
-  address: string
-  decimals: number
-}
 
 export class EthereumWithdrawalAdapter implements IChainWithdrawalAdapter {
   private readonly supportedAssets: WithdrawalAsset[] = ["ETH", "USDT-ERC20"]
@@ -21,7 +17,7 @@ export class EthereumWithdrawalAdapter implements IChainWithdrawalAdapter {
   constructor(
     private readonly provider: ethers.JsonRpcProvider,
     private readonly keyService: HdWalletKeyService,
-    private readonly tokenConfig: Record<string, EthereumTokenConfig> = {}
+    private readonly tokenConfig: Record<string, IEthereumTokenConfig> = {}
   ) {}
 
   supports(asset: WithdrawalAsset): boolean {

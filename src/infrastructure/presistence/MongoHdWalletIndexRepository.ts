@@ -1,4 +1,4 @@
-import { IHdWalletIndexRepository } from "@/domain/wallet/HdWalletIndexRepository"
+import { IHdWalletIndexRepository } from "@/domain/wallet/interface"
 import { MongoRepository } from "@abejarano/ts-mongodb-criteria"
 
 type HdIndexDoc = { sealedSecretId: string; current?: number }

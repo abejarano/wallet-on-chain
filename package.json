@@ -25,6 +25,9 @@
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3.946.0",
+    "@aws-sdk/client-sqs": "^3.955.0",
+    "@google-cloud/kms": "^5.2.1",
+    "@google-cloud/pubsub": "^5.2.0",
     "@noble/secp256k1": "^3.0.0",
     "@scure/bip32": "^2.0.1",
     "bip32": "^4.0.0",

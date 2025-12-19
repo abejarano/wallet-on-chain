@@ -1,11 +1,12 @@
 // helpers de parsing/derivación para claves KMS secp256k1
 import * as secp from "@noble/secp256k1"
-import { Chain } from "@/domain/wallet/KeyManager"
+import { Chain } from "@/domain/wallet/interface"
 import {
   btcP2PKHAddressFromUncompressedPublicKey,
   ethAddressFromUncompressedPublicKey,
   tronAddressFromUncompressedPublicKey,
 } from "@/infrastructure/crypto/helpers/chainAddressDerivers"
+import { IDerivedAddressData } from "@/infrastructure/crypto/interface"
 
 // ---------- Parsing SPKI de KMS (GetPublicKey) ----------
 
@@ -80,11 +81,6 @@ export function extractUncompressedPointFromKmsSpki(
   return Buffer.from(key)
 }
 
-export interface DerivedAddressData {
-  address: string
-  uncompressedPublicKey: Buffer
-}
-
 export const chainAddressDerivers: Record<Chain, (pubKey: Buffer) => string> = {
   ETH: ethAddressFromUncompressedPublicKey,
   BTC: btcP2PKHAddressFromUncompressedPublicKey,
@@ -99,7 +95,7 @@ export const chainAddressDerivers: Record<Chain, (pubKey: Buffer) => string> = {
 export function deriveAddressDataFromSpki(
   chain: Chain,
   spkiDer: Uint8Array
-): DerivedAddressData {
+): IDerivedAddressData {
   const uncompressed = extractUncompressedPointFromKmsSpki(spkiDer)
   const deriver = chainAddressDerivers[chain]
 

@@ -4,7 +4,7 @@ import {
   IKeyManager,
   IWalletRecord,
   IWalletRepository,
-} from "@/domain/wallet/KeyManager"
+} from "@/domain/wallet/interface"
 
 type walletCommand =
   | {
@@ -18,7 +18,7 @@ type walletCommand =
       walletId: string
     }
 
-export class WalletCommand {
+export class WalletMessageHandler {
   constructor(
     private readonly keyManager: IKeyManager,
     private readonly walletRepo: IWalletRepository

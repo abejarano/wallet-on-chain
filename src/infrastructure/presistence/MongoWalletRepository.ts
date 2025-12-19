@@ -1,4 +1,4 @@
-import { IWalletRecord, IWalletRepository } from "@/domain/wallet/KeyManager"
+import { IWalletRecord, IWalletRepository } from "@/domain/wallet/interface"
 import { MongoRepository } from "@abejarano/ts-mongodb-criteria"
 
 export class MongoWalletRepository

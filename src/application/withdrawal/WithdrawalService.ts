@@ -1,21 +1,24 @@
-import { formatMinorUnits, amountToMinorUnits } from "@/domain/withdrawal/amounts"
+import {
+  amountToMinorUnits,
+  formatMinorUnits,
+} from "@/domain/withdrawal/amounts"
 import {
   BroadcastResult,
   IChainWithdrawalAdapter,
   ILedgerGateway,
   IWithdrawalEvent,
   IWithdrawalMessage,
-  WithdrawalEventPublisher,
   WithdrawalContext,
 } from "@/domain/withdrawal/interfaces"
 import { WithdrawalStatus } from "@/domain/withdrawal/enums/WithdrawalStatus.enum"
+import { IMessageBroker } from "@/shared/messaging/interface"
 
 type Logger = Pick<Console, "info" | "error" | "warn">
 
 export class WithdrawalService {
   constructor(
     private readonly ledger: ILedgerGateway,
-    private readonly publisher: WithdrawalEventPublisher,
+    private readonly broker: IMessageBroker,
     private readonly adapters: IChainWithdrawalAdapter[],
     private readonly logger: Logger = console
   ) {}
@@ -27,10 +30,7 @@ export class WithdrawalService {
       return
     }
 
-    const amountInMinorUnits = amountToMinorUnits(
-      request.asset,
-      request.amount
-    )
+    const amountInMinorUnits = amountToMinorUnits(request.asset, request.amount)
 
     const available = await this.ledger.getAvailableBalance(
       request.clientId,
@@ -50,10 +50,10 @@ export class WithdrawalService {
     })
 
     try {
-    const broadcast = await adapter.execute({
-      request,
-      amountInMinorUnits,
-    } as WithdrawalContext)
+      const broadcast = await adapter.execute({
+        request,
+        amountInMinorUnits,
+      } as WithdrawalContext)
 
       await this.ledger.markWithdrawalCompleted({
         clientId: request.clientId,
@@ -102,7 +102,7 @@ export class WithdrawalService {
       txid: result.txid,
     }
 
-    await this.publisher.publish(event)
+    await this.broker.publish(event)
   }
 
   private async publishFailure(
@@ -124,6 +124,6 @@ export class WithdrawalService {
         : undefined,
     }
 
-    await this.publisher.publish(event)
+    await this.broker.publish(event)
   }
 }

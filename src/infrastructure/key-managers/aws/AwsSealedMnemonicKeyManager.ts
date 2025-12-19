@@ -1,4 +1,8 @@
-import { DecryptCommand, GenerateDataKeyCommand } from "@aws-sdk/client-kms"
+import {
+  DecryptCommand,
+  GenerateDataKeyCommand,
+  KMSClient,
+} from "@aws-sdk/client-kms"
 import * as bip39 from "bip39"
 import BIP32Factory, { BIP32Interface } from "bip32"
 import * as ecc from "tiny-secp256k1"
@@ -7,20 +11,18 @@ import crypto from "node:crypto"
 
 import {
   Chain,
-  IDeriveAddressInput,
   ICreateWalletInput,
+  IDeriveAddressInput,
+  IHdWalletIndexRepository,
   IKeyManager,
+  ISealedSecret,
+  ISealedSecretRepository,
   ISignatureResult,
   ISignDigestInput,
   IWalletRecord,
   IWalletRepository,
-} from "@/domain/wallet/KeyManager"
-import {
-  ISealedSecret,
-  ISealedSecretRepository,
-} from "@/domain/wallet/SealedSecretRepository"
-import { IHdWalletIndexRepository } from "@/domain/wallet/HdWalletIndexRepository"
-import { kmsClient } from "@/infrastructure/crypto/kms/kmsClient"
+} from "@/domain/wallet/interface"
+
 import {
   chainAddressDerivers,
   computeChainSignatureValues,
@@ -33,17 +35,24 @@ import {
   aesGcmDecrypt,
   aesGcmEncrypt,
 } from "@/infrastructure/crypto/encryption/aes"
+import { ENV } from "@/config/env"
 
 const bip32 = BIP32Factory(ecc as any)
 
 type EncContext = Record<string, string>
 
-export class SealedMnemonicKeyManager implements IKeyManager {
+export class AwsSealedMnemonicKeyManager implements IKeyManager {
+  private awsKmsClient: KMSClient
+
   constructor(
     private readonly walletRepo: IWalletRepository,
     private readonly sealedRepo: ISealedSecretRepository,
     private readonly hdIndexRepo: IHdWalletIndexRepository
-  ) {}
+  ) {
+    this.awsKmsClient = new KMSClient({
+      region: ENV.AWS_REGION || "us-east-1",
+    })
+  }
 
   private get kmsKeyId(): string {
     const id = AWS_KMS_KEY_ID
@@ -220,7 +229,7 @@ export class SealedMnemonicKeyManager implements IKeyManager {
   ): Promise<ISealedSecret> {
     const encContext = this.buildEncContext(ownerId)
 
-    const dataKey = await kmsClient.send(
+    const dataKey = await this.awsKmsClient.send(
       new GenerateDataKeyCommand({
         KeyId: this.kmsKeyId,
         KeySpec: "AES_256",
@@ -254,7 +263,7 @@ export class SealedMnemonicKeyManager implements IKeyManager {
   }
 
   private async unsealMnemonic(sealed: ISealedSecret): Promise<string> {
-    const decryptResp = await kmsClient.send(
+    const decryptResp = await this.awsKmsClient.send(
       new DecryptCommand({
         CiphertextBlob: Buffer.from(sealed.dataKeyCipherB64, "base64"),
         EncryptionContext: sealed.encContext,
@@ -279,7 +288,7 @@ export class SealedMnemonicKeyManager implements IKeyManager {
   private buildEncContext(ownerId: string): EncContext {
     return {
       ownerId,
-      env: process.env.NODE_ENV || "dev",
+      env: ENV.NODE_ENV || "dev",
     }
   }
 }

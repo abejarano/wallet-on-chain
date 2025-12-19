@@ -8,7 +8,8 @@ incluye la infraestructura (DB, colas, RPCs, ni despliegues de nodos).
 
 - `src/domain`: contratos y reglas de negocio (`wallet`, `withdrawal`), sin dependencias externas.
 - `src/application`: orquestadores de casos de uso y handlers de entrada (colas/brokers).
-- `src/infrastructure`: adaptadores concretos para KMS, cifrado, clientes de blockchain y helpers criptográficos.
+- `src/infrastructure`: adaptadores concretos para KMS, cifrado, clientes de blockchain, brokers SQS/PubSub y helpers
+  criptográficos.
 
 Árbol breve:
 
@@ -16,7 +17,7 @@ incluye la infraestructura (DB, colas, RPCs, ni despliegues de nodos).
 src
 ├─ domain/
 │  ├─ wallet/ (contratos de repositorios y key managers, p.ej. `IWalletRepository`, `IKeyManager`)
-│  └─ withdrawal/ (puertos `ILedgerGateway`, `WithdrawalEventPublisher`, tipos `IWithdrawalMessage/Event`)
+│  └─ withdrawal/ (puertos `ILedgerGateway`, tipos `IWithdrawalMessage/Event`)
 ├─ application/
 │  ├─ wallet/WalletCommand.ts
 │  └─ withdrawal/{WithdrawalCommand,WithdrawalService}.ts
@@ -29,7 +30,7 @@ Más detalle en `docs/architecture.md`.
 
 ## Casos de uso cubiertos
 
-- Crear wallet nuevo con AWS KMS puro (`KmsOnlyKeyManager`) o con mnemónico sellado en KMS (`SealedMnemonicKeyManager`).
+- Crear wallet nuevo con AWS KMS puro (`AwsKmsOnlyKeyManager`) o con mnemónico sellado en KMS (`AwsSealedMnemonicKeyManager`); en GCP, usa `GcpKmsOnlyKeyManager` o `GcpSealedMnemonicKeyManager`.
 - Derivar una nueva dirección de pago a partir de un wallet basado en mnemónico (`deriveAddress` en
   `SealedMnemonicKeyManager`).
 - Procesar retiros on-chain multi‑asset (`WithdrawalService` + adaptadores BTC/ETH/TRX) publicando el estado del retiro.
@@ -40,11 +41,13 @@ Más detalle en `docs/architecture.md`.
     - Comando `CREATE_WALLET`: `{ type, ownerId, chain, assetCode }` → llama a `keyManager.createWallet`.
     - Comando `DERIVE_ADDRESS`: `{ type, walletId }` → busca el wallet base y ejecuta `deriveAddress` usando el
       siguiente índice HD disponible (requiere `SealedMnemonicKeyManager`).
-- `SealedMnemonicKeyManager`: `src/infrastructure/crypto/key-managers/SealedMnemonicKeyManager.ts` genera mnemónico
+- `AwsSealedMnemonicKeyManager`: `src/infrastructure/crypto/key-managers/aws/AwsSealedMnemonicKeyManager.ts` genera mnemónico
   BIP-39, lo sella con KMS, deriva la dirección `m/44'/coinType'/0'/0/index`, guarda `sealedSecretId` y
   `derivationPath`. Puede derivar nuevas direcciones sobre el mismo mnemónico.
-- `KmsOnlyKeyManager`: `src/infrastructure/crypto/key-managers/KmsOnlyKeyManager.ts` crea la clave ECDSA secp256k1 en
+- `AwsKmsOnlyKeyManager`: `src/infrastructure/crypto/key-managers/aws/AwsKmsOnlyKeyManager.ts` crea la clave ECDSA secp256k1 en
   KMS y deriva la dirección directamente desde la llave pública devuelta por KMS. No deriva nuevas direcciones.
+ - `GcpSealedMnemonicKeyManager`: `src/infrastructure/crypto/key-managers/gcp/GcpSealedMnemonicKeyManager.ts` sella mnemónico con data key simétrica en Cloud KMS (`GCP_KMS_DATA_KEY`) y deriva HD/firma localmente.
+ - `GcpKmsOnlyKeyManager`: `src/infrastructure/crypto/key-managers/gcp/GcpKmsOnlyKeyManager.ts` crea la clave secp256k1 en Cloud KMS y firma digests.
 - `HdWalletKeyService`: `src/infrastructure/withdrawals/keys/HdWalletKeyService.ts` desencripta el mnemónico sellado y
   deriva la llave privada/pública para firmar o gastar fondos.
 
@@ -63,23 +66,23 @@ Más detalle en `docs/architecture.md`.
       opcional `tokenConfig` `{ address, decimals }`.
     - TRX / TRC20: `src/infrastructure/withdrawals/adapters/TronWithdrawalAdapter.ts` usa `TronWebClient` (`sendTrx`,
       `triggerSmartContract`, `sign`, `sendRawTransaction`) y `tokenConfig` `{ address, feeLimitSun }`.
-- Publicación de estado: `WithdrawalEventPublisher.publish` recibe eventos `PENDING/FAILED/PROCESSED` con `txid`,
-  `reason` o `balanceAvailable` según corresponda. Puedes reutilizar el mismo publisher para otros eventos de dominio (
-  p.ej. creación de wallet/dirección).
+- Publicación de estado: el `IMessageBroker.publish` envía eventos `PENDING/FAILED/PROCESSED` con `txid`, `reason` o
+  `balanceAvailable` según corresponda. Puedes reutilizar el mismo broker para otros eventos de dominio (p.ej. creación
+  de wallet/dirección).
 
 ## Piezas de infraestructura que debes implementar
 
 - **Persistencia**
-    - `IWalletRepository` (`src/domain/wallet/KeyManager.ts`): guardar/buscar wallets por filtros.
-    - `ISealedSecretRepository` (`src/domain/wallet/SealedSecretRepository.ts`): guardar y recuperar el mnemónico
+    - `IWalletRepository` (`src/domain/wallet/interface/KeyManager.interface.ts`): guardar/buscar wallets por filtros.
+    - `ISealedSecretRepository` (`src/domain/wallet/interface/SealedSecretRepository.interface.ts`): guardar y recuperar el mnemónico
       sellado y metadatos KMS.
-    - `IHdWalletIndexRepository` (`src/domain/wallet/HdWalletIndexRepository.ts`): asignar el siguiente índice HD de
+    - `IHdWalletIndexRepository` (`src/domain/wallet/interface/HdWalletIndexRepository.interface.ts`): asignar el siguiente índice HD de
       forma atómica para evitar colisiones.
 - **Contabilidad y eventos**
     - `ILedgerGateway` (`src/domain/withdrawal/interfaces.ts`): balance disponible, reservar/liberar fondos y marcar
       retiros completados.
-    - `WithdrawalEventPublisher` (`src/domain/withdrawal/interfaces.ts`): publicar el evento del retiro procesado o
-      fallido (basado en el puerto genérico `IEventPublisher`).
+    - `IMessageBroker.publish` (ver `src/shared/messaging/interface`): publicar el evento del retiro procesado o fallido
+      hacia tu cola/tópico de eventos. Implementaciones listas: `SqsMessageBroker` y `PubSubMessageBroker`.
 - **Clientes de red**
     - Ethereum: instanciar `ethers.JsonRpcProvider` apuntando a tu nodo/servicio RPC.
     - Bitcoin: implementar `BitcoinNodeClient` (`walletCreateFundedPsbt`, `finalizePsbt`, `sendRawTransaction`) contra
@@ -89,7 +92,7 @@ Más detalle en `docs/architecture.md`.
     - Conecta tus mensajes entrantes a `WithdrawalCommand.handleBrokerMessage` y `WalletCommand.handle`.
     - Define tus topics/queues y serialización; el repo no trae wiring ni dependencias de mensajería.
 - **Config**
-    - Cargar `tokenConfig` para USDT ERC20/TRC20, `AWS_KMS_KEY_ID`, `AWS_REGION`, RPC URLs, timeouts, etc.
+    - Cargar `tokenConfig` para USDT ERC20/TRC20, `AWS_KMS_KEY_ID`, `AWS_REGION`, RPC URLs, timeouts, etc. Para GCP KMS: `GCP_PROJECT`, `GCP_KMS_KEY_RING`, opcional `GCP_KMS_LOCATION`, `GCP_KMS_PROTECTION_LEVEL` y `GCP_KMS_DATA_KEY` (llave simétrica usada para sellar el mnemónico).
 
 ## Claves y uso de AWS KMS
 
@@ -98,7 +101,7 @@ Más detalle en `docs/architecture.md`.
     - `CreateKey` (`KeySpec: ECC_SECG_P256K1`, `KeyUsage: SIGN_VERIFY`)
     - `GetPublicKey` (para derivar dirección y `publicKeyHex`)
     - `Sign` (`MessageType: DIGEST`, `SigningAlgorithm: ECDSA_SHA_256`)
-- `SealedMnemonicKeyManager` (mnemónico sellado):
+- `AwsSealedMnemonicKeyManager` (mnemónico sellado):
     - `GenerateDataKey` con `AWS_KMS_KEY_ID` para cifrar el mnemónico (AES-GCM local).
     - `Decrypt` para obtener la data key y desencriptar el mnemónico.
     - Derivación HD: `m/44'/coinType'/0'/0/index` (coin type en `src/infrastructure/crypto/config/Config.ts`).

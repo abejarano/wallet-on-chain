@@ -1,7 +1,7 @@
 import {
   ISealedSecret,
   ISealedSecretRepository,
-} from "@/domain/wallet/SealedSecretRepository"
+} from "@/domain/wallet/interface"
 import { MongoRepository } from "@abejarano/ts-mongodb-criteria"
 
 export class MongoSealedSecretRepository

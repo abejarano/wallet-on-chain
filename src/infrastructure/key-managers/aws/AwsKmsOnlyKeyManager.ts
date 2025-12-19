@@ -5,6 +5,7 @@ import {
   SignCommand,
   SigningAlgorithmSpec,
 } from "@aws-sdk/client-kms"
+import crypto from "node:crypto"
 
 import {
   ICreateWalletInput,
@@ -13,23 +14,25 @@ import {
   ISignDigestInput,
   IWalletRecord,
   IWalletRepository,
-} from "@/domain/wallet/KeyManager"
-import { kmsClient } from "@/infrastructure/crypto/kms/kmsClient"
+} from "@/domain/wallet/interface"
+import { awsKmsClient } from "@/infrastructure/key-managers/aws/AwsKmsClient"
 import {
   computeChainSignatureValues,
   deriveAddressDataFromSpki,
   derSignatureToRS,
 } from "@/infrastructure/crypto/helpers"
-import crypto from "node:crypto"
 
-export class KmsOnlyKeyManager implements IKeyManager {
+/**
+ * Key manager AWS KMS (secp256k1). No soporta derivación HD.
+ */
+export class AwsKmsOnlyKeyManager implements IKeyManager {
   constructor(private walletRepo: IWalletRepository) {}
 
   async createWallet(input: ICreateWalletInput): Promise<IWalletRecord> {
     const { ownerId, chain, assetCode } = input
 
     // 1) Crear llave asimétrica en KMS
-    const createKeyResp = await kmsClient.send(
+    const createKeyResp = await awsKmsClient.send(
       new CreateKeyCommand({
         KeySpec: "ECC_SECG_P256K1",
         KeyUsage: "SIGN_VERIFY",
@@ -48,7 +51,7 @@ export class KmsOnlyKeyManager implements IKeyManager {
     if (!kmsKeyId) throw new Error("KMS CreateKey failed: no KeyId")
 
     // 2) Obtener public key cruda (SPKI DER)
-    const pubResp = await kmsClient.send(
+    const pubResp = await awsKmsClient.send(
       new GetPublicKeyCommand({
         KeyId: kmsKeyId,
       })
@@ -81,7 +84,7 @@ export class KmsOnlyKeyManager implements IKeyManager {
       throw new Error(`Wallet ${wallet.walletId} has no kmsKeyId`)
     }
 
-    const signResp = await kmsClient.send(
+    const signResp = await awsKmsClient.send(
       new SignCommand({
         KeyId: wallet.kmsKeyId,
         Message: digest,

@@ -1,42 +1,19 @@
-import { WalletCommand } from "@/application/wallet/WalletCommand"
-import { WithdrawalCommand } from "@/application/withdrawal/WithdrawalCommand"
+import { WalletMessageHandler } from "@/application/wallet/WalletMessageHandler"
+import { WithdrawalMessageHandler } from "@/application/withdrawal/WithdrawalMessageHandler"
 import { MongoWalletRepository } from "@/infrastructure/presistence/MongoWalletRepository"
 import { MongoSealedSecretRepository } from "@/infrastructure/presistence/MongoSealedSecretRepository"
 import { MongoHdWalletIndexRepository } from "@/infrastructure/presistence/MongoHdWalletIndexRepository"
-import { resolveKeyManager } from "@/infrastructure/factories/keyManagerFactory"
-
-/**
- * Tipo de mensaje esperado desde el broker para crear/derivar wallets.
- * Toma directamente el tipo que consume WalletCommand.handle.
- */
-type WalletCommandMessage = Parameters<WalletCommand["handle"]>[0]
-type WithdrawalCommandMessage = Parameters<WithdrawalCommand["handle"]>[0]
-
-interface CommandBroker {
-  /**
-   * Registra el handler para mensajes entrantes del tópico/cola que uses
-   * (SQS, Kafka, Redis, etc).
-   */
-  onWalletCommand(
-    handler: (message: WalletCommandMessage) => Promise<void>
-  ): Promise<void>
-
-  /**
-   * Handler para comandos de retiro.
-   */
-  onWithdrawalCommand?(
-    handler: (message: WithdrawalCommandMessage) => Promise<void>
-  ): Promise<void>
-}
+import { resolveKeyManager } from "@/infrastructure/key-managers/keyManagerFactory"
+import { IMessageBroker, WalletCommandMessage, WithdrawalCommandMessage, } from "@/shared/messaging/interface"
 
 /**
  * Punto de entrada sugerido: el subscriber del broker crea el consumer con sus
  * dependencias y delega el manejo de cada mensaje.
  */
 export async function startWalletCommandSubscriber(params: {
-  broker: CommandBroker
+  broker: IMessageBroker
 }) {
-  await params.broker.onWalletCommand(async (message) => {
+  await params.broker.onWalletMessage(async (message: WalletCommandMessage) => {
     const walletRepo = MongoWalletRepository.instance()
     const sealedRepo = MongoSealedSecretRepository.instance()
     const hdIndexRepo = MongoHdWalletIndexRepository.instance()
@@ -47,7 +24,7 @@ export async function startWalletCommandSubscriber(params: {
       hdIndexRepo,
     })
 
-    await new WalletCommand(keyManager, walletRepo).handle(message)
+    await new WalletMessageHandler(keyManager, walletRepo).handle(message)
   })
 }
 
@@ -56,14 +33,16 @@ export async function startWalletCommandSubscriber(params: {
  * provista (ya configurada con WithdrawalService y adaptadores).
  */
 export async function startWithdrawalCommandSubscriber(params: {
-  broker: CommandBroker
-  withdrawalCommand: WithdrawalCommand
+  broker: IMessageBroker
+  withdrawalHandler: WithdrawalMessageHandler
 }) {
-  if (!params.broker.onWithdrawalCommand) {
-    throw new Error("El broker no implementa onWithdrawalCommand")
+  if (!params.broker.onWithdrawalMessage) {
+    throw new Error("El broker no implementa onWithdrawalMessage")
   }
 
-  await params.broker.onWithdrawalCommand(async (message) => {
-    await params.withdrawalCommand.handle(message)
-  })
+  await params.broker.onWithdrawalMessage(
+    async (message: WithdrawalCommandMessage) => {
+      await params.withdrawalHandler.handle(message)
+    }
+  )
 }
